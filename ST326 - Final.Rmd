@@ -1,0 +1,257 @@
+
+______________________________________
+-=-=-=-=-=-=- Question 1 -=-=-=-=-=-=-
+______________________________________
+
+
+```{r}
+library(quantmod)
+library(ggplot2)
+options(scipen = 1000000)
+
+tickers = c("MSFT", "AAPL", "NVDA", "BAC", "JPM","JNJ", "PG", "AMZN", "GOOGL", "FB")
+
+for (ticker in tickers) {
+  getSymbols(ticker, from = "2016-12-1", to= "2021-11-30") # Extract date from last 5 years beginning first trading day of December 2016
+}
+date = index(MSFT)
+
+# The following extracts just the adjusted closing price
+MSFT <- (MSFT$MSFT.Adjusted)
+AAPL <- (AAPL$AAPL.Adjusted)
+NVDA <- (NVDA$NVDA.Adjusted)
+BAC <- (BAC$BAC.Adjusted)
+JPM <- (JPM$JPM.Adjusted)
+JNJ <- (JNJ$JNJ.Adjusted)
+PG <- (PG$PG.Adjusted)
+AMZN <- (AMZN$AMZN.Adjusted)
+GOOGL <- (GOOGL$GOOGL.Adjusted)
+FB <- (FB$FB.Adjusted)
+
+# Creating a data frame of the log of the prices for each stock for each day
+log_prices <- data.frame(date, log(MSFT),log(AAPL),log(AMZN),log(GOOGL),log(FB),log(NVDA),log(BAC),log(JPM),log(JNJ),log(PG)) 
+
+ggplot()+
+  geom_line(log_prices,mapping = aes(x=date ,y=MSFT.Adjusted, color="Microsoft"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=AAPL.Adjusted, color="Apple"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=NVDA.Adjusted, color="Nvidia"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=BAC.Adjusted, color="Bank of America"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=JPM.Adjusted, color="JP Morgan"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=JNJ.Adjusted, color="Johnson&Johnson"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=PG.Adjusted, color="Proctor&Gamble"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=AMZN.Adjusted, color="Amazon"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=GOOGL.Adjusted, color="Google"))+
+  geom_line(log_prices,mapping = aes(x=date ,y=FB.Adjusted, color="Meta"))+
+  scale_color_manual(name = "Companies", values = c("Microsoft" = "blueviolet", "Apple" = "blue","Nvidia" = "Mediumpurple2","Banker of America" = "darkgoldenrod","JP Morgan" = "mediumspringgreen","Johnson&Johnson" = "Gold","Proctor&Gamble" = "Khaki","Amazon" = "Green","Google" = "cyan","Meta" = "purple")) +
+   labs(x='Dates',y='log prices')
+  
+# Calculating the log returns for each day
+MSFT_r <- diff(log(MSFT),1)
+AAPL_r <- diff(log(AAPL),1)
+AMZN_r <- diff(log(AMZN),1)
+GOOGL_r <- diff(log(GOOGL),1)
+FB_r <- diff(log(FB),1)
+NVDA_r <- diff(log(NVDA),1)
+BAC_r <- diff(log(BAC),1)
+JPM_r <- diff(log(JPM),1)
+JNJ_r <- diff(log(JNJ),1)
+PG_r <- diff(log(PG),1)
+
+# Creating a data frame for the log returns
+returns <- data.frame(MSFT_r,AAPL_r,AMZN_r,GOOGL_r,FB_r,NVDA_r,BAC_r,JPM_r,JNJ_r,PG_r)
+returns <- returns[-c(1),]   # Removes first row since we do not have log returns for the first day of the dataset
+
+# Calculating covariance matrix of the returns
+cov_returns <- cov(returns)
+
+# Calculating eigenvalues of the covariance
+ev_returns <- eigen(cov_returns)
+
+# Calculating condition number
+condition_No <- abs(max(ev_returns$values)/min(ev_returns$values))
+
+# Saving the the dates as a csv so that I can use this to identify the index number of certain dates
+write.csv(date,"C:\\Users\\antho\\OneDrive\\Documents\\LSE\\YEAR 3\\ST326\\Coursework\\dates.csv", row.names = FALSE)
+
+# Using the csv above, I found the index number for 2018-12-03, which is the first trading in December 2018
+# The following calculates the condition number using only the past 3 years of data
+startdate3 = date[505]
+returns_3 <- returns[505:1256,]
+cov_returns3 <- cov(returns_3)
+ev_returns3 <- eigen(cov_returns3)
+condition_No3 <- abs(max(ev_returns3$values)/min(ev_returns3$values))
+
+startdate1 = date[1007]
+returns_1 <- returns[1007:1256,]
+cov_returns1 <- cov(returns_1)
+ev_returns1 <- eigen(cov_returns1)
+condition_No1 <- abs(max(ev_returns1$values)/min(ev_returns1$values))
+
+```
+
+______________________________________
+-=-=-=-=-=-=- Question 2 -=-=-=-=-=-=-
+______________________________________
+
+I am first gonna define a function which carries out the one-fund theorem.
+
+```{r}
+
+function1 <- function(x,y,z){
+
+  returns_window <- returns[z:x,]
+  meanReturns_window <- colMeans(returns_window)
+  covariance_window <- cov(returns_window)
+  bondyields_window <- bondyields[z:x]
+  meanYield <- mean(bondyields_window)
+  target_return <- m*meanYield
+
+  # Now applying the formula to calculate the market portfolio weighting, page 70 of lecture notes
+  excess_returns = meanReturns_window - (meanYield*one_col)
+  excess_returns = as.vector(excess_returns)
+
+  inv_covariance_window = solve(covariance_window)
+
+  numerator_mkt = inv_covariance_window %*% excess_returns
+  denominator_mkt = (one_row%*%inv_covariance_window)%*%excess_returns
+
+  denominator_mkt <- as.numeric(denominator_mkt)
+  mkt_weights = numerator_mkt/denominator_mkt
+
+  # Applying formula to calculate optimal portfolio weights, page 70 of lecture notes
+  numerator_opt = (target_return - meanYield)*(denominator_mkt)
+  denominator_opt = t(excess_returns) %*% numerator_mkt
+
+  opt_weights = mkt_weights %*% (numerator_opt/denominator_opt)
+  bond_weight = 1 - sum(opt_weights)
+
+  # Calculating the actual return of the portfolio after the 50 days
+  returns_mat <- as.matrix(returns)
+  portfolio_returns =  sum(returns_mat[x:y,] %*% opt_weights) + sum(bond_weight*bondyields[x:y])
+
+  results_matrix[1] <- target_return
+  results_matrix[2] <- portfolio_returns
+  new <- append(results_matrix, t(opt_weights), after = 2)
+  return(new)
+}
+
+```
+
+Now computing carrying out the one-fund theorem for specific parameters.
+
+```{r}
+bondyields <- read.csv("bondyield.csv")
+bondyields <- bondyields[bondyields$Adj.Close != "null",]
+bondyields <- (bondyields$Adj.Close)
+bondyields <- as.numeric(bondyields)
+bondyields <- bondyields/25200
+
+results_matrix <- c()
+
+one_row <- c(1,1,1,1,1,1,1,1,1,1)
+one_col <- t(one_row)
+
+t = 100
+d = 60
+m = 2
+i = 50
+
+No_sets = floor((NROW(bondyields)-t)/i)
+
+result1 <- matrix(data = NA, nrow= No_sets,ncol=12)
+
+# Calculating for the first window
+result1[1,] <- function1(t,t+i,t-d+1)
+
+# Calculating for the second window
+result1[2,] <- function1(t+i,t+2*i,t+i-d+1)
+
+# Calculating for the remaining windows
+for (k in (3:No_sets)) {
+start_date = t + (k-1)*i
+end_date = start_date + i
+w = start_date - d + 1
+
+result1[k,] <- function1(start_date, end_date, w)
+}
+
+# Extracting appropriate data from the result matrix
+target_returns <- result1[,1]
+actual_returns <- result1[,2]
+portfolio_weights <- result1[,3:12]
+
+mean_returns = mean(actual_returns)
+vol_returns = sd(actual_returns)
+sharpe_ratio = (mean_returns/vol_returns) * sqrt(250/i)
+
+```
+
+
+______________________________________
+-=-=-=-=-=-=- Question 3 -=-=-=-=-=-=-
+______________________________________
+
+
+```{r}
+
+# Pre-defining vectors to store Sharpe Ratios and AvsAchg
+new_sharpe_ratio <- c()
+AvsAchg <- c()
+
+# Created an intermediate to store the values of the sum of absolute change in portfolio weight for each time period. Then I can sum each time period to find AvsAchg
+intermediate <- c()
+
+a=1
+
+# Defining combinations of parameters
+d_new = c(30,35,40,45,50,55,60)
+i_new = c(60,65,70,75,80,85,90)
+m_new = c(2,3,4)
+
+
+# Created embedded for loops to compute Sharpe Ratios and AvsAchg for each combination of parameters
+for (u in d_new) {
+for (p in i_new) {
+for (o in m_new) {
+  
+  t_new = u 
+  m=o
+  No_sets = floor((NROW(bondyields) - t_new)/p)
+  
+  # Pre-defining vectors and matrices to store values from the function
+  new_actual_returns <- c()
+  new_portfolio_weights <- matrix(0,nrow = No_sets, 10)
+  result1 <- matrix(data = NA, nrow= No_sets,ncol=12) # This will store target return, actual return, and portfolio weights
+  
+  for (k in (1:No_sets)) {
+  start_date = t_new + (k-1)*p
+  end_date = start_date + p
+  w = start_date - u + 1
+  
+  # Calling function with the new parameters
+  result1[k,] <- function1(start_date, end_date, w)
+  
+  new_actual_returns[k] <- result1[k,2]
+  new_portfolio_weights[k,] <- result1[k,3:12]
+  
+  }
+  
+  # Following for loop adds the sum of absolute change for each time period to a vector
+  for (k in (2:No_sets)) {
+  intermediate[k-1] = sum(abs(new_portfolio_weights[k,]-new_portfolio_weights[k-1,]))
+  }
+
+  new_sharpe_ratio[a] = (mean(new_actual_returns)/sd(new_actual_returns)) * sqrt(250/i)
+  AvsAchg[a] = (1/p)* sum(intermediate)
+
+  a = a+1
+  
+}}}
+
+# The following creates a table of the different combinations of parameters and the corresponding sharpe ratio
+library(data.table)
+sharpe_ratio_table = cbind(CJ(d_new, i_new, m_new), new_sharpe_ratio, AvsAchg)
+write.csv(sharpe_ratio_table,"C:\\Users\\antho\\OneDrive\\Documents\\LSE\\YEAR 3\\ST326\\Coursework\\FinalResults.csv", row.names = FALSE)
+
+```
+
